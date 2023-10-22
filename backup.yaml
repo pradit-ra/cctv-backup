@@ -1,0 +1,8 @@
+- channelID: "101"
+  hostURL: "http://de7a0ee31d90.sn.mynetname.net:88"
+  credential:
+    user: "admin"
+    password: "S@dmin@88"
+  backup:
+    from: "2023-09-25 23:48:40Z"
+    to: "2023-09-26 23:48:50Z"

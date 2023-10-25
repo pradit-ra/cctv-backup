@@ -11,13 +11,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func (c *cctvBackup) Backup(items []SearchMatchItem) error {
+const dtfmt = "20060102T150405"
+
+func (c *cctvBackup) Backup(segments []TimeSegment) error {
 	g := &errgroup.Group{}
-	for _, it := range items {
-		// generate unique file name (key)
-		key := buildKey(it.PlaybackURI)
-		reqPayload := bytes.NewReader([]byte(getDownloadData(it.PlaybackURI)))
-		// goroutine to copy multiple video files into a storage simultaneously
+	for _, s := range segments {
+		key := buildKey(s)
+		reqPayload := bytes.NewReader([]byte(buildData(c.info.HostAddr, c.info.TrackID, s)))
+		// goroutine to copy multiple video segments into a storage simultaneously
 		g.Go(func() error {
 			var reader io.ReadCloser
 			// handle stream close gracefully after function is called
@@ -28,8 +29,9 @@ func (c *cctvBackup) Backup(items []SearchMatchItem) error {
 					}
 				}
 			}()
-			logger.Info("start downloading video", "key", key)
-			req := newCCTVRequest(downloadEndpoint(c.info.HostURL), reqPayload)
+			downloadURL := &url.URL{Scheme: "http", Host: c.info.HostAddr, Path: "/ISAPI/ContentMgmt/download"}
+			logger.Info("start downloading video", "key", key, "downloadURL", downloadURL.String())
+			req := newCCTVRequest(downloadURL, reqPayload)
 
 			resp, err := c.httpC.Do(req)
 			if err != nil {
@@ -47,10 +49,11 @@ func (c *cctvBackup) Backup(items []SearchMatchItem) error {
 	return g.Wait()
 }
 
-func getDownloadData(RTSPEndpoint string) string {
+func buildData(hostAddr string, trackID string, s TimeSegment) string {
 	tmpl := func(name, t string) *template.Template {
 		return template.Must(template.New(name).Parse(t))
 	}
+	rtspUrlData := fmt.Sprintf("rtsp://%s/Streaming/tracks/%s?starttime=%s&endtime=%s", hostAddr, trackID, s.Start, s.End)
 	xml := tmpl("xml", `
 	<?xml version="1.0" encoding="UTF-8" ?>
 	<downloadRequest version="1.0" xmlns="http://www.isapi.org/ver20/XMLSchema">
@@ -61,13 +64,11 @@ func getDownloadData(RTSPEndpoint string) string {
 	xml.Execute(&compiledTmpl, struct {
 		RTSPEndpoint string
 	}{
-		RTSPEndpoint: RTSPEndpoint,
+		RTSPEndpoint: rtspUrlData,
 	})
 	return compiledTmpl.String()
 }
 
-func buildKey(RTSPEndpoint string) string {
-	u, _ := url.Parse(RTSPEndpoint)
-	name := u.Query().Get("name")
-	return fmt.Sprintf("%s.h264", name)
+func buildKey(seg TimeSegment) string {
+	return fmt.Sprintf("%v-%v.h264", seg.Start.Format(dtfmt), seg.End.Format(dtfmt))
 }

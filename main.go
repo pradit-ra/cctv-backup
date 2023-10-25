@@ -6,10 +6,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -26,7 +24,7 @@ var (
 	metricChan chan (*worker.ExecutionMetric) = make(chan *worker.ExecutionMetric)
 
 	// cli options
-	numOfWorker        = 5
+	numOfWorker        = 3
 	taskBuffer         = 10 //Goroutine (user thread) should be configurable
 	bucket      string = ""
 	prefix      string = "/Users/pradit.ra/TDProjects/cctv-backup/temp/downloads"
@@ -35,20 +33,20 @@ var (
 
 // Yaml Unmarshal
 type BackupData struct {
-	ChannelID  string `yaml:"channelID"`
-	HostURL    string `yaml:"hostURL"`
+	TrackID    string `yaml:"trackID"`
+	Addr       string `yaml:"addr"`
 	Credential struct {
 		User     string `yaml:"user"`
 		Password string `yaml:"password"`
 	} `yaml:"credential"`
-	Backup struct {
-		From string `yaml:"from"`
-		To   string `yaml:"to"`
-	} `yaml:"backup"`
+	Segments []struct {
+		From time.Time `yaml:"from"`
+		To   time.Time `yaml:"to"`
+	} `yaml:"segments"`
 }
 
 var errorHandler worker.FailedTaskHandlerFunc = func(err error, info *cctv.CCTVInfo) {
-	logger.Warn("Error to backup Video CCTV", "channelID", info.ChannelID, "url", info.HostURL.Host, "err", err)
+	logger.Warn("Error to backup Video CCTV", "TrackID", info.TrackID, "HostAddr", info.HostAddr, "err", err)
 }
 
 func loadTasks() ([]worker.Task, error) {
@@ -65,22 +63,20 @@ func loadTasks() ([]worker.Task, error) {
 	}
 	logger.Debug(fmt.Sprintf("load data file contains %d records", len(backupdata)))
 	for _, d := range backupdata {
-		h, err := url.Parse(d.HostURL)
-		if err != nil {
-			return nil, fmt.Errorf("error to parse host url %w", err)
-		}
 		// storage, err := cctv.NewGCSBackupStorage(bucket, prefix)
 		storage := cctv.NewFileBackupStorage(prefix)
 		if err != nil {
 			return nil, fmt.Errorf("error to create storage %w", err)
 		}
-		cc := cctv.NewCCTVBackup(d.ChannelID, h, &cctv.Credential{
+		cc := cctv.NewCCTVBackup(d.TrackID, d.Addr, &cctv.Credential{
 			User:     d.Credential.User,
 			Password: d.Credential.Password,
 		}, storage)
-		t := worker.NewCCTVBackupTask(cc, worker.BackupPayload{
-			SearchFrom: d.Backup.From,
-			SearchTo:   d.Backup.To,
+		t := worker.NewCCTVBackupTask(cc, worker.TaskPayload{
+			Segments: []struct {
+				From time.Time
+				To   time.Time
+			}(d.Segments),
 		}, errorHandler)
 		tasks = append(tasks, t)
 	}
@@ -89,12 +85,10 @@ func loadTasks() ([]worker.Task, error) {
 
 func main() {
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-	// start profiling goroutine
-	// go logGoroutine()
 
 	logger.Info("Run CCTV video backup job")
 	ctx, cancel := context.WithCancel(context.Background())
-	// defer cancel()
+	defer cancel()
 
 	wp := worker.NewWorkerPool(numOfWorker, taskBuffer, metricChan)
 
@@ -128,11 +122,4 @@ func main() {
 	}()
 	// run and wait
 	wp.RunTasks(tasks...)
-}
-
-func logGoroutine() {
-	for {
-		logger.Debug(fmt.Sprintf("[Goroutine] Total current goroutine: %d", runtime.NumGoroutine()))
-		time.Sleep(5 * time.Second)
-	}
 }

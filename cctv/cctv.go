@@ -41,21 +41,18 @@ type Credential struct {
 	User, Password string
 }
 
-func searchEndpoint(url *url.URL) *url.URL {
-	return url.JoinPath("/ISAPI/ContentMgmt/search")
-}
-
-func downloadEndpoint(url *url.URL) *url.URL {
-	return url.JoinPath("/ISAPI/ContentMgmt/download")
-}
-
 type CCTVInfo struct {
-	ChannelID string
-	HostURL   *url.URL
+	TrackID  string
+	HostAddr string
 }
+
+type TimeSegment struct {
+	Start time.Time
+	End   time.Time
+}
+
 type CCTVBackup interface {
-	SearchVideo(start string, end string) (SearchResult, error)
-	Backup(items []SearchMatchItem) error
+	Backup(segments []TimeSegment) error
 	GetInfo() *CCTVInfo
 }
 
@@ -70,11 +67,11 @@ func (c *cctvBackup) GetInfo() *CCTVInfo {
 	return c.info
 }
 
-func NewCCTVBackup(chanID string, hostURL *url.URL, cred *Credential, storage BackupStorage) CCTVBackup {
+func NewCCTVBackup(trackID string, hostAddr string, cred *Credential, storage BackupStorage) CCTVBackup {
 	return &cctvBackup{
 		info: &CCTVInfo{
-			ChannelID: chanID,
-			HostURL:   hostURL,
+			TrackID:  trackID,
+			HostAddr: hostAddr,
 		},
 		httpC:   newHttpClient(cred.User, cred.Password),
 		storage: storage,

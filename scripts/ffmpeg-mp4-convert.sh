@@ -43,13 +43,13 @@ for i in "$@"; do
 done
 
 if [[ -z ${SRC_DIR+x} ]]; then 
-    echo "Missing --src option"
+    echo "Missing --src=<option>"
     help
     exit 1
 fi
 
 if [[ -z ${DEST_DIR+x} ]]; then 
-    echo "Missing --desc option"
+    echo "Missing --desc=<option>"
     help
     exit 1
 fi
@@ -61,7 +61,7 @@ for FILE in "${SRC_DIR}"/* ; do
     if [[ "$FILE" =~ .*(\.h264)$ ]] ; then
         output=${DEST_DIR}/${filename%.*}.mp4
         set -e
-        ffmpeg -loglevel info -n -i "$FILE" -vf "scale=640:360" -crf 30  "${output}"
+        ffmpeg -loglevel error -n -i "$FILE" -vf "scale=640:360" -crf 30  "${output}"
         if [[ $? -eq 0 ]]; then 
             echo "📹 Convert to MP4 successfully, output: ${output}"
         else

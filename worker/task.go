@@ -3,6 +3,7 @@ package worker
 import (
 	"cctv-backup/v1/cctv"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -17,12 +18,14 @@ type Task interface {
 	onFailure(error)
 }
 
-type BackupPayload struct {
-	SearchFrom string
-	SearchTo   string
+type TaskPayload struct {
+	Segments []struct {
+		From time.Time
+		To   time.Time
+	}
 }
 
-func NewCCTVBackupTask(cctvBk cctv.CCTVBackup, payload BackupPayload, handler FailedTaskHandlerFunc) Task {
+func NewCCTVBackupTask(cctvBk cctv.CCTVBackup, payload TaskPayload, handler FailedTaskHandlerFunc) Task {
 	return &cctvBackupTask{
 		id:                uuid.NewString(),
 		cctvBk:            cctvBk,
@@ -35,17 +38,19 @@ func NewCCTVBackupTask(cctvBk cctv.CCTVBackup, payload BackupPayload, handler Fa
 type cctvBackupTask struct {
 	id                string
 	cctvBk            cctv.CCTVBackup
-	payload           BackupPayload
+	payload           TaskPayload
 	failedTaskHandler FailedTaskHandlerFunc
 }
 
 func (c *cctvBackupTask) Exec() error {
-	sr, err := c.cctvBk.SearchVideo(c.payload.SearchFrom, c.payload.SearchTo)
-	if err != nil {
-		return err
+	var segs []cctv.TimeSegment
+	for _, p := range c.payload.Segments {
+		segs = append(segs, cctv.TimeSegment{
+			Start: p.From,
+			End:   p.To,
+		})
 	}
-	logger.Info("Done search video in range", "from", c.payload.SearchFrom, "to", c.payload.SearchTo, "found", len(sr.SearchMatchItems))
-	if err := c.cctvBk.Backup(sr.SearchMatchItems); err != nil {
+	if err := c.cctvBk.Backup(segs); err != nil {
 		return fmt.Errorf("Task exec error %w", err)
 	}
 	return nil

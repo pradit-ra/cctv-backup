@@ -1,8 +1,12 @@
-- channelID: "101"
-  hostURL: "http://de7a0ee31d90.sn.mynetname.net:88"
+- trackID: 901
+  addr: de7a0ee31d90.sn.mynetname.net:88
   credential:
-    user: "admin"
-    password: "S@dmin@88"
-  backup:
-    from: "2023-09-25 23:48:40Z"
-    to: "2023-09-26 23:48:50Z"
+    user: admin
+    password: S@dmin@88
+  segments:
+    - from: 2023-09-27T12:00:00Z
+      to: 2023-09-27T12:00:25Z
+    - from: 2023-09-27T12:00:50Z
+      to: 2023-09-27T12:01:15Z
+    - from: 2023-09-27T14:00:00Z
+      to: 2023-09-27T14:00:25Z

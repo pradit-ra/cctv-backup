@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mp4-converter
+  labels:
+    name: mp4-converter
+  annotations:
+    gke-gcsfuse/volumes: "true"
+    gke-gcsfuse/cpu-limit: 200m
+    gke-gcsfuse/memory-limit: 100Mi
+    gke-gcsfuse/ephemeral-storage-limit: 100Gi
+spec:
+  securityContext:
+    runAsUser: 65534
+    runAsGroup: 65534
+  serviceAccountName: SERVICE_ACCOUNT
+  containers:
+    - name: mp4-converter
+      image: <Image>
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+      resources:
+        limits:
+          memory: "250Mi"
+          cpu: "1"
+      args:
+        - --src=/data/raw
+        - --dest=/data/processed
+      volumeMounts:
+        - name: raw-videos-vol
+          mountPath: /data/raw
+          readOnly: true
+        - name: processed-videos-vol
+          mountPath: /data/processed
+          readOnly: false
+  volumes:
+    - name: raw-videos-vol
+      csi:
+        driver: gcsfuse.csi.storage.gke.io
+        readOnly: true
+        volumeAttributes:
+          bucketName: BUCKET_NAME
+          mountOptions: "implicit-dirs,uid=65534,gid=65534,only-dir=/path/to/raw/and/partition"
+    - name: processed-videos-vol
+      csi:
+        driver: gcsfuse.csi.storage.gke.io
+        readOnly: false
+        volumeAttributes:
+          bucketName: BUCKET_NAME
+          mountOptions: "implicit-dirs,uid=65534,gid=65534,only-dir=/path/to/processed/and/partition"

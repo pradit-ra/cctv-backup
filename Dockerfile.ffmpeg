@@ -1,3 +1,9 @@
 FROM linuxserver/ffmpeg:version-6.0-cli
 LABEL org="tdshop"
 LABEL maintainer="data-ops"
+
+COPY ./scripts/ffmpeg-mp4-converter.sh /ffmpeg-mp4-converter.sh
+RUN mkdir -p /data/raw \
+    && mkdir -p /data/processed \
+    && chmod -R 777 /data
+ENTRYPOINT [ "/ffmpeg-mp4-converter.sh" ]

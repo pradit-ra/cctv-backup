@@ -4,13 +4,16 @@ import (
 	"cctv-backup/v1/cctv"
 	"cctv-backup/v1/worker"
 	"context"
+	"log"
+	"os/signal"
+	"syscall"
+
 	"fmt"
 	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
+	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -83,22 +86,19 @@ func loadTasks() ([]worker.Task, error) {
 	return tasks, nil
 }
 
-func main() {
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
-
+func action(ctx *cli.Context) {
 	logger.Info("Run CCTV video backup job")
-	ctx, cancel := context.WithCancel(context.Background())
+	workerCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	wp := worker.NewWorkerPool(numOfWorker, taskBuffer, metricChan)
 
 	tasks, err := loadTasks()
 	if err != nil {
-		logger.Error("error to load data file", "err", err)
-		os.Exit(1)
+		cli.Exit("error to load data file", 1)
 	}
 	// Start and Wait
-	wp.StartWorker(ctx)
+	wp.StartWorker(workerCtx)
 
 	// Receive output from signalChan or pool execution metric channel
 	go func() {
@@ -122,4 +122,53 @@ func main() {
 	}()
 	// run and wait
 	wp.RunTasks(tasks...)
+}
+
+func main() {
+	// capture SIGTERM or SIGINT signals
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	app := &cli.App{
+		Name: "CCTV video backup",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:     "input_file",
+				Aliases:  []string{"i"},
+				Usage:    "Data `FILE`.yaml contains cctv backup info",
+				Required: true,
+			},
+			&cli.IntFlag{
+				Name:    "worker",
+				Aliases: []string{"w"},
+				Usage:   "Number of `WORKER` in pool",
+				Value:   3,
+			},
+			&cli.IntFlag{
+				Name:    "buffer",
+				Aliases: []string{"s"},
+				Usage:   "Queue `BUFFER` size to receive a job",
+				Value:   10,
+			},
+			&cli.StringFlag{
+				Name:     "bucket",
+				Aliases:  []string{"b"},
+				Usage:    "GCS `BUCKET` name",
+				Required: true,
+			},
+			&cli.StringFlag{
+				Name:    "path_prefix",
+				Aliases: []string{"p"},
+				Usage:   "Backup `PATH` directory prefix",
+				Value:   "",
+			},
+		},
+		Action: func(ctx *cli.Context) error {
+			action(ctx)
+			return nil
+		},
+	}
+	app.Suggest = true
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
+	}
 }
